@@ -3,15 +3,12 @@ Kerbal Powers Dynamics Licensing and Credits
 --------------------------------------------
 
 Functionality by Spartwo
-BulletDefs by Saturn
 Original assets and art by MiffedStarfish and Spartwo
 Sounds by Squiddy
-40, 57, 76, 127mm fire sound fx by Panzer1b
-Lynx fire sound by Spartwo
 TURD configurations by Spartwo
 Waterfall configurations by Spartwo
 
-Kerbal Powers Naval and Kerbal Powers Armory comprise wholly original work. Code is released under the GPL 3.0 license. Assets (Models (*.mu) and Textures *.dds)) are released with All Rights Reserved. If you wish to use or modify any of these assets for another mod, just ask permission and it'll probably be a yes.
+Kerbal Powers Naval comprises wholly original work. Code is released under the GPL 3.0 license. Assets (Models (*.mu) and Textures *.dds)) are released with All Rights Reserved. If you wish to use or modify any of these assets for another mod, just ask permission and it'll probably be a yes.
 
 Kerbal Powers Interstellar contains assets modified from the works of Porkjet and Nearta. As such, the assets for the TX-40 High Performance Radiator are released under the MIT license, and the assets for the Cirrus-V Roundified Liquid Fuel Tank are released under the CC 4.0 license. The ISX-53 "Pletelyos" Afterburning Fusion Engine is released with All Rights Reserved in line with other original assets.
 
