@@ -16,7 +16,7 @@ A small mod adding an extremely efficient but thermally demanding afterburning f
 
 -------------------------------------------------------
 
-*All mods are compatible with Waterfall and TURD. Paint for KP Armory can be found bundled with TURD for BD Armory  [here](https://github.com/Spartwo/TURD-BDArmory).*
+*All mods are compatible with Waterfall and TURD. 
 
 
 -------------------------------------------------------
