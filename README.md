@@ -5,14 +5,15 @@ A series of mods created for the game Kerbal Powers, by Spartwo and MiffedStarfi
 
 ![alt text](https://wiki.kerbalpowers.org/images/c/ca/KP_Naval_2.png)
 ![alt text](https://wiki.kerbalpowers.org/images/1/19/KP_Naval.png)
-![alt text](https://i.imgur.com/naYFVSZ.png)
 
-A lightweight, stockalike and physically accurate mod enabling the creation of watercraft and submarines with minimal complexity or additions to the stock game. Includes three different sizes of propellers and variable ballast tanks, which realistically simulate thrust and buoyancy across multiple environments including other celestial bodies. Also contains minor quality of life improvements to fuel cells and wheels. Firespitter is a dependency.
+Stockalike and physically accurate mod for creating watercraft and submarines with minimal complexity. Includes three different sizes of propellers, variable ballast tanks, and naval generators.
 
 -------------------------------------------------------
 ### Kerbal Powers Interstellar
 
-A small mod adding an extremely efficient but thermally demanding afterburning fusion engine for vacuum. Allows for interstellar transits or rapid in-system travel with minimal changes to stock.  Some parts use art modified from the works of Nearta and Porkjet in compliance with respective licenses.
+![alt text](https://wiki.kerbalpowers.org/images/f/f0/KP_Interstellar.png)
+
+A small mod adding an extremely efficient but thermally demanding afterburning fusion engine for vacuum. Allows for interstellar transits or rapid in-system travel with minimal changes to stock.  Some parts use art modified from the works of Porkjet in compliance with respective license.
 
 -------------------------------------------------------
 
