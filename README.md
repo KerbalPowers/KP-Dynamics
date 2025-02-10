@@ -19,7 +19,6 @@ A small mod adding an extremely efficient but thermally demanding afterburning f
 
 *All mods are compatible with Waterfall and TURD. 
 
-
 -------------------------------------------------------
 
 Kerbal Powers is a geopolitical role-playing game using the universe of Kerbal Space Program as its setting. More info can be found at:
