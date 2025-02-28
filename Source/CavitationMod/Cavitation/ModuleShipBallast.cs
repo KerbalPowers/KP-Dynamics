@@ -21,46 +21,31 @@ namespace Cavitation
         const string ballastDisplayName = "#LOC_KPDynamics_Ballast";
 
         // CFG Values
-        [KSPField(isPersistant = true)]
-        float maxBuoyancy = 5;
-        [KSPField(isPersistant = true)]
-        float minBuoyancy = 0;
-        [KSPField(isPersistant = true)]
-        float maxSpeed = 5;
-        [KSPField(isPersistant = true)]
-        float maxDepth = 2000;
-        [KSPField()]
-        float pumpRate = 2;
+        [KSPField] public float maxBuoyancy;
+        [KSPField] public float minBuoyancy;
+        [KSPField] public float maxSpeed;
+        [KSPField] public float maxDepth;
+        [KSPField] public float pumpRate;
 
-        [KSPField(isPersistant = true)]
-        float variantPumpRate = 0;
-        [KSPField(isPersistant = true)]
-        float ECRequirement = 2;
+        [KSPField] public float variantPumpRate;
+        [KSPField] public float ECRequirement;
 
-        // user settings
+        [KSPField(isPersistant = true)] public bool useTargetDepth = true;
+
 
         float partBuoyancy;
+        float smallestVariantMass = 0;
 
-        [KSPAxisField(isPersistant = true,
-            guiActive = true,
+        #region User Settings
+
+        [KSPEvent(guiActive = true,
             guiActiveEditor = true,
-            guiName = "#LOC_KPDynamics_TargetDepth",
-            guiUnits = " m",
             groupName = ballastGroupName,
             groupDisplayName = ballastDisplayName,
-            axisMode = KSPAxisMode.Incremental,
-            minValue = 0f,
-            maxValue = 2000f,
-            incrementalSpeed = 10f),
-            UI_FloatRange(
-                minValue = 0f,
-                maxValue = 2000f,
-                stepIncrement = 25f,
-                scene = UI_Scene.All
-            )]
-         public float targetDepth = 0f;
+            guiName = "#LOC_KPDynamics_ToggleControlType")]
+        public void EventToggleTracking() => ToggleType();
 
-         [KSPField(isPersistant = false,
+        [KSPField(isPersistant = false,
              guiActive = true,
              guiActiveEditor = false,
              guiName = "#LOC_KPDynamics_CurrentDepth",
@@ -99,9 +84,47 @@ namespace Cavitation
              guiName = "#LOC_KPDynamics_Status",
              groupName = ballastGroupName,
              groupDisplayName = ballastDisplayName)]
-        public string ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastIdle");
+        public string ballastStatus = "Idle";
 
-        float smallestVariantMass = 0;
+        [KSPAxisField(isPersistant = true,
+            guiActive = true,
+            guiActiveEditor = true,
+            guiName = "#LOC_KPDynamics_TargetDepth",
+            guiUnits = " m",
+            groupName = ballastGroupName,
+            groupDisplayName = ballastDisplayName,
+            axisMode = KSPAxisMode.Incremental,
+            minValue = 0f,
+            maxValue = 2000f,
+            incrementalSpeed = 10f),
+            UI_FloatRange(
+                minValue = 0f,
+                maxValue = 2000f,
+                stepIncrement = 25f,
+                scene = UI_Scene.All
+            )]
+        public float targetDepth = 0f;
+
+        [KSPAxisField(isPersistant = true,
+            guiActive = true,
+            guiActiveEditor = true,
+            guiName = "#LOC_KPDynamics_TargetFlooding",
+            guiUnits = "%",
+            groupName = ballastGroupName,
+            groupDisplayName = ballastDisplayName,
+            axisMode = KSPAxisMode.Incremental,
+            minValue = 0f,
+            maxValue = 100f,
+            incrementalSpeed = 1f),
+            UI_FloatRange(
+                minValue = 0f,
+                maxValue = 100f,
+                stepIncrement = 1f,
+                scene = UI_Scene.All
+            )]
+        public float targetFill = 0f;
+        #endregion
+
         public override void OnStart(StartState state)
         {
             if (HighLogic.LoadedSceneIsEditor) 
@@ -117,47 +140,84 @@ namespace Cavitation
 
             variantPumpRate = pumpRate;
             smallestVariantMass = part.mass;
+
+            UpdateUI();
         }
 
         #region Part Actions
+        [KSPAction("#LOC_KPDynamics_ToggleControlType")]
+        public void AGToggleType(KSPActionParam param) => ToggleType();
+
         [KSPAction("#LOC_KPDynamics_TogglePump")]
-        public void AGTogglePump(KSPActionParam param) 
-        {
-            pumpActive = !pumpActive;
-            //UpdateUI(pumpActive);
-        }
+        public void AGTogglePump(KSPActionParam param) => pumpActive = !pumpActive;
 
         [KSPAction("#LOC_KPDynamics_EnablePump")]
-        public void AGEnablePump(KSPActionParam param)
-        {
-            pumpActive = true;
-            //UpdateUI(pumpActive);
-        }
+        public void AGEnablePump(KSPActionParam param) => pumpActive = true;
 
         [KSPAction("#LOC_KPDynamics_DisablePump")]
-        public void AGDisablePump(KSPActionParam param)
-        {
-            pumpActive = false;
-            //UpdateUI(pumpActive);
-        }
+        public void AGDisablePump(KSPActionParam param) => pumpActive = false;
         #endregion
 
         public override void OnUpdate()
         {
-            //On physics update
-            //gradual buoyancy update in flight
+            // On physics update
+            // Gradual buoyancy update in flight
             if (HighLogic.LoadedSceneIsFlight)
             {
                 currentDepth = (int)Math.Round(Math.Abs(part.orbit.altitude));
-                //Adjust buoyancy center to lowest corner(maybe)
+                // Adjust buoyancy center to lowest corner(maybe)
                 //Vector3 CenterOfBuoyancy
-                //Compare with target depth and adjust flooding status
-                PumpAdjust();
+                // Compare with target depth and adjust flooding status
+                if (useTargetDepth) { DepthPumpAdjust(); } else { FloodPumpAdjust(); }
                 
             }
         }
 
-        private void PumpAdjust()
+        private void FloodPumpAdjust()
+        {
+            if (part.checkSplashed() && pumpActive)
+            {   
+                // Calculate error
+                float error = targetFill - fillPercent;
+                float absoluteError = Math.Abs(error);
+
+                float drainRatePerSecond = (variantPumpRate / 100) * maxBuoyancy;
+                float increment = drainRatePerSecond * TimeWarp.deltaTime;
+
+                // Check if there's enough EC
+                bool hasEC = availableEC(ECRequirement);
+
+                // Adjust buoyancy towards the target
+                if (absoluteError <= 1) // Within 1% of target, no adjustment
+                {
+                    ballastStatus = "Idle";
+                }
+                else if (error > 1) // Need to take in more water
+                {
+                    ballastStatus = "Flooding";
+                    partBuoyancy -= increment;
+                }
+                else if (error < -1) // Need to expel water
+                {
+                    ballastStatus = "Draining";
+                    partBuoyancy += increment;
+                }
+
+                // Clamp buoyancy within min and max limits
+                partBuoyancy = Mathf.Clamp(partBuoyancy, minBuoyancy, maxBuoyancy);
+                part.buoyancy = partBuoyancy;
+
+                // Display fill percent
+                float difference = maxBuoyancy - partBuoyancy;
+                fillPercent = Mathf.RoundToInt((difference / maxBuoyancy) * 100);
+            }
+            else
+            {
+                ballastStatus = "Idle";
+            }
+        }
+
+        private void DepthPumpAdjust()
         {
             if (part.checkSplashed())
             {
@@ -167,68 +227,75 @@ namespace Cavitation
 
                 // Place a reductive speed curve to ease part to a halt starting at 100m and ending at 2m
                 double verticalSpeedLimit = Mathf.Max(Mathf.Min(absoluteError / 20, maxSpeed), 0.25f);
-                float incriment = (((variantPumpRate / 100) * maxBuoyancy) * ((float)verticalSpeedLimit / (float)10));
+                float drainRatePerSecond = (((variantPumpRate / 100) * maxBuoyancy) * ((float)verticalSpeedLimit / (float)10));
+                float increment = drainRatePerSecond * TimeWarp.deltaTime;
                 double vesselSpeed = vessel.verticalSpeed;
 
+                // Check if there's enough EC
+                bool hasEC = availableEC(ECRequirement);
 
                 if (pumpActive)
                 {
-                    if (part.GroundContact)
+                    if (!hasEC)
                     {
-                        ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastAground");
+                        ballastStatus = "Insufficient EC";
                     }
                     else if (error < -1)
                     {
-                        ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastAscending");
+                        ballastStatus = "Ascending";
                     }
                     else if (error > 1)
                     {
-                        ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastDescending");
+                        ballastStatus = "Descending";
                     }
                     else
                     {
-                        ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastIdle");
+                        ballastStatus = "Idle";
                     }
 
-                    if (vesselSpeed >= verticalSpeedLimit) // ascending too fast
+                    if (hasEC)
                     {
-                        partBuoyancy -= incriment;
-                    }
-                    else if (vesselSpeed <= -verticalSpeedLimit && availableEC(ECRequirement)) // descending too fast
-                    {
-                        partBuoyancy += incriment;
-                    }
-                    else if (error > 0) // above target depth
-                    {
-                        partBuoyancy -= incriment;
-                    }
-                    else if (error < 0 && availableEC(ECRequirement)) // below target depth
-                    {
-                        partBuoyancy += incriment;
-                    }
-
-                    //If aiming for surface and near surface just flush the tanks entirely
-                    if (partBuoyancy < maxBuoyancy && currentDepth < 10 && targetDepth == 0 && availableEC(ECRequirement))
-                    {
-                        partBuoyancy += incriment;
+                        if (vesselSpeed >= verticalSpeedLimit) // ascending too fast
+                        {
+                            partBuoyancy -= increment;
+                        }
+                        else if (vesselSpeed <= -verticalSpeedLimit) // descending too fast
+                        {
+                            partBuoyancy += increment;
+                        }
+                        else if (error > 0) // above target depth
+                        {
+                            partBuoyancy -= increment;
+                        }
+                        else if (error < 0) // below target depth
+                        {
+                            partBuoyancy += increment;
+                        }
                     }
 
+                    // If aiming for surface and near surface just flush the tanks entirely
+                    if (partBuoyancy < maxBuoyancy && currentDepth < 10 && targetDepth == 0 && hasEC)
+                    {
+                        partBuoyancy += increment;
+                    }
+
+                    // Clamp buoyancy within min and max limits
                     partBuoyancy = Mathf.Clamp(partBuoyancy, minBuoyancy, maxBuoyancy);
                     part.buoyancy = partBuoyancy;
 
-                    //display fill percent
+                    // Display fill percent
                     float difference =  maxBuoyancy - partBuoyancy;
                     fillPercent = Mathf.RoundToInt((difference/maxBuoyancy)*100);
                 }
                 else
                 {
-                    ballastStatus = StringUtils.Localize("#LOC_KPDynamics_NoEC");
+                    ballastStatus = "Idle";
                 }
             }
             else
             {
                 currentDepth = 0;
-                ballastStatus = StringUtils.Localize("#LOC_KPDynamics_ThrustWaterline");
+                ballastStatus = "Above Waterline";
             }
             //Debug.Log("[Cavitation] Real Bouyancy: " + part.buoyancy);
         }
@@ -264,6 +331,21 @@ namespace Cavitation
                                     "\nPump Rate: " + pumpRate + "%/s (Base)" +
                                     "\n\nRequires " + ECRequirement + "ec/s when pumping";
             return returnString;
+        }
+        public void ToggleType()
+        {
+            useTargetDepth = !useTargetDepth;
+            UpdateUI();
+        }
+        private void UpdateUI()
+        {
+            Fields["targetDepth"].guiActive = Fields["targetDepth"].guiActiveEditor = useTargetDepth;
+            Fields["targetFill"].guiActive = Fields["targetFill"].guiActiveEditor = !useTargetDepth;
+        }
+
+        private void OnUseTargetDepthChanged(BaseField field, object obj)
+        {
+            UpdateUI();
         }
     }
 }
