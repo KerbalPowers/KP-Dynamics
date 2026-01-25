@@ -200,6 +200,7 @@ namespace Cavitation
                 {
                     ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastDraining");
                     partBuoyancy += increment;
+                    demandEC(ECRequirement);
                 }
 
                 // Clamp buoyancy within min and max limits
@@ -261,6 +262,7 @@ namespace Cavitation
                         else if (vesselSpeed <= -verticalSpeedLimit) // descending too fast
                         {
                             partBuoyancy += increment;
+                            demandEC(ECRequirement);
                         }
                         else if (error > 0) // above target depth
                         {
@@ -269,6 +271,7 @@ namespace Cavitation
                         else if (error < 0) // below target depth
                         {
                             partBuoyancy += increment;
+                            demandEC(ECRequirement);
                         }
                     }
 
@@ -317,9 +320,25 @@ namespace Cavitation
         private Boolean availableEC(float ECDemand)
         {
             // Make sure that at least 95% of required ec is there
-            float drainAmount = ECDemand * Time.fixedDeltaTime;
-            double chargeAvailable = part.RequestResource("ElectricCharge", drainAmount, ResourceFlowMode.ALL_VESSEL);
-            return chargeAvailable > drainAmount * 0.95f;
+            double amount;
+            double maxAmount;
+
+            part.GetConnectedResourceTotals(
+                PartResourceLibrary.Instance.GetDefinition("ElectricCharge").id,
+                out amount,
+                out maxAmount
+            );
+
+            return amount >= ECDemand * Time.fixedDeltaTime * 0.95;
+        }
+
+        private void demandEC(float ECDemand)
+        {
+            part.RequestResource(
+                "ElectricCharge",
+                ECRequirement * Time.fixedDeltaTime,
+                ResourceFlowMode.ALL_VESSEL
+            );
         }
 
         public override string GetInfo()
