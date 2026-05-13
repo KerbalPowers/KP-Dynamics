@@ -32,6 +32,12 @@ namespace Cavitation
 
         public override void FXUpdate()
         {
+            if (!HighLogic.LoadedSceneIsFlight)
+            {
+                base.FXUpdate();
+                return;
+            }
+
             if (base.CheckTransformsUnderwater())
             {
                 base.status = StringUtils.Localize("#LOC_KPDynamics_ThrustNominal");
