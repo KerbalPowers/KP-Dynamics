@@ -76,7 +76,6 @@
     <Compile Include="FXModuleAnimateNaval.cs" />
     <Compile Include="ModuleEngineFlooding.cs" />
     <Compile Include="ModuleBallastDamage.cs" />
-    <Compile Include="ModuleKPDepthMask.cs" />
     <Compile Include="ModuleShipBallast.cs" />
     <Compile Include="ModuleSplashedThrust.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
