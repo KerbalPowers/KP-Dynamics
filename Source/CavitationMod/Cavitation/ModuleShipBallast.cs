@@ -26,14 +26,13 @@ namespace Cavitation
         [KSPField] public float maxDepth;
         [KSPField] public float pumpRate;
 
-        [KSPField] public float variantPumpRate;
         [KSPField] public float ECRequirement;
 
         [KSPField(isPersistant = true)] public bool useTargetDepth = true;
 
-
-        float partBuoyancy;
-        float smallestVariantMass = 0;
+        PartResource ballastWater;
+        float unitsPerSecond;
+        float partBuoyancy;  // current buoyancy of the part
 
         #region User Settings
 
@@ -137,8 +136,10 @@ namespace Cavitation
             var floatRange = (UI_FloatRange)Fields["targetDepth"].uiControlEditor;
             floatRange.maxValue = maxDepth;
 
-            variantPumpRate = pumpRate;
-            smallestVariantMass = part.mass;
+            ballastWater = part.Resources.Get("KPBallastWater");
+
+            UpdateBuoyancyFromBallast();
+            UpdatePumpData();
 
             UpdateUI();
         }
@@ -174,47 +175,69 @@ namespace Cavitation
 
         private void FloodPumpAdjust()
         {
-            if (part.checkSplashed() && pumpActive)
-            {   
-                // Calculate error
-                float error = targetFill - fillPercent;
-                float absoluteError = Math.Abs(error);
-
-                float drainRatePerSecond = (variantPumpRate / 100) * maxBuoyancy;
-                float increment = drainRatePerSecond * TimeWarp.deltaTime;
-
-                // Check if there's enough EC
-                bool hasEC = availableEC(ECRequirement);
-
-                // Adjust buoyancy towards the target
-                if (absoluteError <= 1) // Within 1% of target, no adjustment
-                {
-                    ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastIdle");
-                }
-                else if (error > 1) // Need to take in more water
-                {
-                    ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastFlooding");
-                    partBuoyancy -= increment;
-                }
-                else if (error < -1) // Need to expel water
-                {
-                    ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastDraining");
-                    partBuoyancy += increment;
-                    demandEC(ECRequirement);
-                }
-
-                // Clamp buoyancy within min and max limits
-                partBuoyancy = Mathf.Clamp(partBuoyancy, minBuoyancy, maxBuoyancy);
-                part.buoyancy = partBuoyancy;
-
-                // Display fill percent
-                float difference = maxBuoyancy - partBuoyancy;
-                fillPercent = Mathf.RoundToInt((difference / maxBuoyancy) * 100);
-            }
-            else
+            if (!part.checkSplashed() || !pumpActive)
             {
                 ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastIdle");
+                return;
             }
+
+            float increment = unitsPerSecond * TimeWarp.deltaTime;
+            bool hasEC = availableEC(ECRequirement);
+
+            // Current fill in 0..1
+            float fill = (float)(ballastWater.amount / ballastWater.maxAmount);
+            float target = targetFill * 0.01f;   // convert % → 0..1
+
+            float error = target - fill;
+
+            if (Mathf.Abs(error) < 0.00001f)
+            {
+                ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastIdle");
+                return;
+            }
+
+            if (error > 0f)   // Need to flood
+            {
+                ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastFlooding");
+
+                float remaining = (float)ballastWater.maxAmount - (float)ballastWater.amount;
+
+                // Magnetise if this frame would overshoot
+                if (increment >= remaining)
+                {
+                    ballastWater.amount = ballastWater.maxAmount;
+                }
+                else
+                {
+                    ballastWater.amount += increment;
+                }
+            }
+            else             // Need to drain
+            {
+                ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastDraining");
+
+                float remaining = (float)ballastWater.amount;
+
+                if (hasEC)
+                {
+                    if (increment >= remaining)
+                    {
+                        ballastWater.amount = 0f;
+                    }
+                    else
+                    {
+                        ballastWater.amount -= increment;
+                    }
+
+                    demandEC(ECRequirement);
+                }
+                else
+                {
+                    ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastEC");
+                }
+            }
+
+            UpdateBuoyancyFromBallast();
         }
 
         private void DepthPumpAdjust()
@@ -227,8 +250,8 @@ namespace Cavitation
 
                 // Place a reductive speed curve to ease part to a halt starting at 100m and ending at 2m
                 double verticalSpeedLimit = Mathf.Max(Mathf.Min(absoluteError / 20, maxSpeed), 0.25f);
-                float drainRatePerSecond = (((variantPumpRate / 100) * maxBuoyancy) * ((float)verticalSpeedLimit / (float)10));
-                float increment = drainRatePerSecond * TimeWarp.deltaTime;
+
+                float increment = unitsPerSecond * TimeWarp.deltaTime;
                 double vesselSpeed = vessel.verticalSpeed;
 
                 // Check if there's enough EC
@@ -257,20 +280,36 @@ namespace Cavitation
                     {
                         if (vesselSpeed >= verticalSpeedLimit) // ascending too fast
                         {
-                            partBuoyancy -= increment;
+                            ballastWater.amount = Mathf.Clamp(
+                                (float)ballastWater.amount + increment,
+                                0f,
+                                (float)ballastWater.maxAmount
+                            );
                         }
                         else if (vesselSpeed <= -verticalSpeedLimit) // descending too fast
                         {
-                            partBuoyancy += increment;
+                            ballastWater.amount = Mathf.Clamp(
+                                (float)ballastWater.amount - increment,
+                                0f,
+                                (float)ballastWater.maxAmount
+                            );
                             demandEC(ECRequirement);
                         }
                         else if (error > 0) // above target depth
                         {
-                            partBuoyancy -= increment;
+                            ballastWater.amount = Mathf.Clamp(
+                                (float)ballastWater.amount + increment,
+                                0f,
+                                (float)ballastWater.maxAmount
+                            );
                         }
                         else if (error < 0) // below target depth
                         {
-                            partBuoyancy += increment;
+                            ballastWater.amount = Mathf.Clamp(
+                                (float)ballastWater.amount - increment,
+                                0f,
+                                (float)ballastWater.maxAmount
+                            );
                             demandEC(ECRequirement);
                         }
                     }
@@ -278,21 +317,19 @@ namespace Cavitation
                     // If aiming for surface and near surface just flush the tanks entirely
                     if (partBuoyancy < maxBuoyancy && currentDepth < 10 && targetDepth == 0 && hasEC)
                     {
-                        partBuoyancy += increment;
+                        ballastWater.amount = Mathf.Clamp(
+                            (float)ballastWater.amount - increment,
+                            0f,
+                            (float)ballastWater.maxAmount
+                        );
                     }
-
-                    // Clamp buoyancy within min and max limits
-                    partBuoyancy = Mathf.Clamp(partBuoyancy, minBuoyancy, maxBuoyancy);
-                    part.buoyancy = partBuoyancy;
-
-                    // Display fill percent
-                    float difference =  maxBuoyancy - partBuoyancy;
-                    fillPercent = Mathf.RoundToInt((difference/maxBuoyancy)*100);
                 }
                 else
                 {
                     ballastStatus = StringUtils.Localize("#LOC_KPDynamics_BallastIdle");
                 }
+
+                UpdateBuoyancyFromBallast();
             }
             else
             {
@@ -304,18 +341,27 @@ namespace Cavitation
 
         private void OnVariantApplied(Part appliedPart, PartVariant variant)
         {
-            if (appliedPart == part)
-            {
-                float pumpChange = smallestVariantMass / (smallestVariantMass + variant.Mass);
-                variantPumpRate = pumpChange * pumpRate;
-                //Debug.Log("[Cavitation] : Pump Rate" + variantPumpRate + "/s");
-            }
+            if (appliedPart != part || ballastWater == null) return;
         }
         private void OnEditorVariantApplied(Part appliedPart, PartVariant variant)
         {
-            float pumpChange = smallestVariantMass / (smallestVariantMass + variant.Mass);
-            variantPumpRate = pumpChange * pumpRate;
-            //Debug.Log("[Cavitation] : Edit Pump Rate" + variantPumpRate + "/s");
+            if (appliedPart != part || ballastWater == null) return;
+
+            Part basePrefab = part.partInfo.partPrefab;
+            float baseBallastCapacity = (float)basePrefab.Resources.Get("KPBallastWater").maxAmount;
+            float baseVariantMass = basePrefab.mass;
+
+            // Scale resource max amount
+            float massDelta = Mathf.Min(baseVariantMass, (baseVariantMass + variant.Mass)) / baseVariantMass;
+            float newCapacity = baseBallastCapacity * massDelta;
+
+            Debug.Log($"[Cavitation] Setting Variant Capacity: {newCapacity}");
+
+            // Cap current amount to new max
+            ballastWater.maxAmount = newCapacity;
+            ballastWater.amount = 0;
+
+            UpdatePumpData();
         }
         private Boolean availableEC(float ECDemand)
         {
@@ -339,6 +385,41 @@ namespace Cavitation
                 ECRequirement * Time.fixedDeltaTime,
                 ResourceFlowMode.ALL_VESSEL
             );
+        }
+
+        public void UpdateBuoyancyFromBallast()
+        {
+            if (ballastWater == null) return;
+
+            float fill = (float)(ballastWater.amount / ballastWater.maxAmount);
+            fill = Mathf.Clamp01(fill);
+
+            // Convert to emptiness
+            float empty = 1f - fill;
+
+            /*
+            // Compress positive buoyancy region because almost all the range is positive
+            float threshold = 0.5f;          // fill fraction at which ramp accelerates
+            float normalizedFill = Mathf.Min(fill / threshold, 1f);
+
+            float curveFactor = 3f; // higher = more pronounced ramp near full
+            float buoyancyFrac = Mathf.Pow(fill, curveFactor); // simple exponent curve
+            */
+
+            // full tank → min buoyancy
+            partBuoyancy = Mathf.Lerp(maxBuoyancy, minBuoyancy, fill);
+            part.buoyancy = partBuoyancy;
+
+            //Debug.Log($"[Cavitation] Fill: {fill}, Buoyancy: {partBuoyancy}");
+
+            fillPercent = Mathf.RoundToInt(fill * 100f);
+        }
+
+        private void UpdatePumpData()
+        {
+            // Convert pumpRate (% of base capacity per second) to units per second using base variant capacity
+            float baseCapacity = (float)part.partInfo.partPrefab.Resources.Get("KPBallastWater").maxAmount;
+            unitsPerSecond = (pumpRate / 100f) * baseCapacity;
         }
 
         public override string GetInfo()

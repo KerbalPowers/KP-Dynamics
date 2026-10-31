@@ -64,6 +64,7 @@
     <Reference Include="UnityEngine.InputModule">
       <HintPath>..\..\..\Kerbal Space Program - RP\KSP_x64_Data\Managed\UnityEngine.InputModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.PhysicsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
     <Reference Include="UnityEngine.UI">
       <HintPath>..\..\..\Kerbal Space Program - RP\KSP_x64_Data\Managed\UnityEngine.UI.dll</HintPath>
     </Reference>
@@ -74,6 +75,8 @@
   <ItemGroup>
     <Compile Include="FXModuleAnimateNaval.cs" />
     <Compile Include="ModuleEngineFlooding.cs" />
+    <Compile Include="ModuleBallastDamage.cs" />
+    <Compile Include="ModuleKPDepthMask.cs" />
     <Compile Include="ModuleShipBallast.cs" />
     <Compile Include="ModuleSplashedThrust.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
